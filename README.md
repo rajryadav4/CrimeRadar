@@ -18,6 +18,7 @@ Team project for **CS 5200 Database Management Systems** at Northeastern Univers
 | [`sql/crime_radar_all.sql`](sql/crime_radar_all.sql) | Builds the `CrimeRadar` database: drops and creates all tables, loads and cleans the SPD CSV, generates sample rows for the supporting tables, and prints row counts |
 | [`sql/milestone3_business_queries.sql`](sql/milestone3_business_queries.sql) | The 11 business-insight queries (Milestone 3) |
 | [`docs/CrimeRadar-Milestone3.pdf`](docs/CrimeRadar-Milestone3.pdf) | Milestone 3 report with query results |
+| [`CrimeRadar/`](CrimeRadar) | Java web app (Eclipse Dynamic Web Project): JDBC data layer with a model class and DAO for every table, a test driver, and a JSP incident search page |
 | [`poster/`](poster) | Showcase poster: HTML source, print PDF (36 × 24 in) and PNG |
 | [`data/`](data) | Where the SPD CSV goes (not committed). See [`data/README.md`](data/README.md) |
 
@@ -50,6 +51,45 @@ mysql --local-infile=1 -u root -p < sql/crime_radar_all.sql
 mysql -u root -p < sql/milestone3_business_queries.sql
 ```
 
+## Running the web app
+
+Requires Java 17+, Eclipse IDE for Enterprise Java and Web Developers, and
+Apache Tomcat 9 (not 10). The MySQL Connector/J and JSTL jars are already in
+`CrimeRadar/src/main/webapp/WEB-INF/lib`.
+
+1. Build the database first (see above).
+2. In Eclipse: **File > Import > Existing Projects into Workspace**, and select
+   the `CrimeRadar/` folder.
+3. Set your MySQL login: copy `CrimeRadar/src/main/java/db.properties.example`
+   to `db.properties` in the same folder and fill in your password.
+   `db.properties` is git-ignored, so never commit credentials.
+4. Test the data layer: right-click `crimeradar.tools.Inserter` > **Run As >
+   Java Application**. It reads the SPD data, then creates, reads, updates and
+   deletes a test row in every table and cleans up after itself.
+5. Run the web app: right-click the project > **Run As > Run on Server**
+   (Tomcat 9), then open <http://localhost:8080/CrimeRadar/findincidents>.
+
+### Code layout
+
+| Package | Contents |
+|---|---|
+| `crimeradar.model` | One class per table. Foreign keys are held as objects; `ENUM` columns are Java enums |
+| `crimeradar.dal` | `ConnectionManager` and one DAO per table (create, read, update, delete) |
+| `crimeradar.tools` | `Inserter`, the data-layer test driver |
+| `crimeradar.servlet` + `webapp/*.jsp` | `FindIncidents`: the 50 most recent incidents for a neighborhood |
+
+Notes on the data layer:
+
+- Incident and 911-call queries join their parent tables into a single query,
+  and list methods take a row limit, since those tables hold 150,000 and 30,000 rows.
+- The schema has no `ON DELETE CASCADE`. Deleting a user removes their
+  emergency contacts and SOS alerts and detaches their route recommendations
+  (`UserId` set to NULL); deleting a route removes its segments and
+  recommendations. Both run in a single transaction.
+- `AppUsersDao.hashPassword()` produces the same SHA-256 hex format as the
+  seed data, so the generated users (`user1@example.com` / `password1`, ...)
+  match.
+
 ## Key findings
 
 | Question | Finding |
@@ -76,7 +116,8 @@ The query scores and ranks 5,000 routes safest-first in about 0.28 s
 
 ## Roadmap
 
-- Java JDBC + JSP web app with full CRUD and live route scoring
+- JSP pages for the rest of the data layer (user CRUD, contacts, SOS alerts,
+  neighborhood risk) and live route scoring
 - ETL workflows that add events and tourism data to predict busy-area risk
 - Lag-adjusted risk scores, walking routes and multilingual alerts
 
